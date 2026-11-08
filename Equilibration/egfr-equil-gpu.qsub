@@ -1,0 +1,24 @@
+#! /bin/bash
+##SBATCH --account=wong
+#SBATCH --partition=gpu
+#SBATCH --job-name=egfr-equil
+#SBATCH --time=1-0:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --array=31-36
+#SBATCH --gres=gpu:A100:1
+
+task=$SLURM_ARRAY_TASK_ID
+#export name=`echo "egfr-wt-active-charmm egfr-wt-inactive-charmm egfr-t747t751p-active-charmm egfr-t751i759n-active-charmm egfr-dele746a750-active-charmm egfr-t790m-active-charmm egfr-l858r-active-charmm" | \
+#        awk -v i=$task '{print $i}'`
+export name=`awk -v i=$task '($1==i) {print $2}' list`
+export boxl=`cat $name-box-lengths`
+export scratch=/mnt/pixstor/data/voavtv/egfr
+
+module load namd
+nprocs=$SLURM_NTASKS
+namd3 +p${nprocs} egfr-equil-charmm.inp | tee io/$name-equil.out
+

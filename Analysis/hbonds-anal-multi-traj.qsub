@@ -1,0 +1,18 @@
+#! /bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=requeue
+#SBATCH --job-name=hbonds-anal
+#SBATCH --time=18:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --array=1
+#SBATCH --mem=131072
+
+task=$SLURM_ARRAY_TASK_ID
+#export name=`awk -v i=$task '($1==i) {print $2}' list`
+module load miniconda3
+#vmd -eofexit -dispdev text -e analyze-hbonds2.tcl -args $name 10
+./hb-multi-traj.py 3 100

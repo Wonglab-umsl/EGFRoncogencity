@@ -1,0 +1,70 @@
+*
+bomblev -1
+set toppar = ~/toppar_c36_jul20
+open unit 1 read formatted name @toppar/top_all36_prot.rtf
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @toppar/par_all36_prot.prm
+read para card unit 1
+close unit 1
+open unit 1 read formatted name egfr-wt-@state-charmm.psf
+read psf card unit 1
+close unit 1
+open unit 1 read formatted name data/egfr-wt-@state-charmm-min.cor
+read coor card unit 1
+close unit 1
+!LRE mutation --res. 747-749
+delete atom select resid 747:749 show end
+patch link prot 745 prot 746 prot 750 prot 751
+autogen angles dihedrals
+
+set name = egfr-del747lre-@state-charmm
+
+  UPDATE atom CDIE eps 1 cutnb 21 ctofnb 18 ctonnb 16 switch vswitch
+
+  GBMV EPSILON 80 BUFR 0.2 MEM 20 CUTA 20 ALFRQ 1 -
+       GEOM BETA -12 P1 0.45 P2 1.25 P3 0.65 P6 8.0 -
+       CORR 1 SHIFT -0.1 SLOPE 0.9 WTYP 1 NPHI 5 -
+       FAST 1 SGBFRQ 4 SXD 0.3
+
+
+if name .eq. er-wt-active-charmm then
+        define known select resid 696:720 .or. resid 723:746 .or. resid 750:985 end
+else if name .eq. er-del747lre-active-charmm then
+        define known select resid 696:720 .or. resid 723:746 .or. resid 750:985 end
+else if name .eq. er-wt-inactive-charmm then
+        define known select resid 701:871 .or. resid 875:983 end
+else
+        echo "unknown name"
+        stop
+endif
+define known select known .and. .not. type h* show end
+
+coor copy comp
+set i = 1
+label loopstart
+        calc k = 10 ** (5 - @i)
+        cons harm abso force @k mass comp select known end
+        mini sd nstep 100
+        mini abnr nstep 100
+        cons harm clear
+incr i by 1
+if i .le. 9 goto loopstart
+cons harm clear
+mini sd nstep 100
+mini abnr nstep 500
+
+
+
+
+open unit 1 write formatted name @name.psf
+write psf card unit 1
+close unit 1
+open unit 1 write formatted name data/@name-min.cor
+write coor card unit 1
+close unit 1
+open unit 1 write formatted name data/@name-min.pdb
+write coor pdb unit 1
+close unit 1
+
+stop

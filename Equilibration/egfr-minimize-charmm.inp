@@ -1,0 +1,104 @@
+#
+# NAMD script for minimization: H Kamnberaj and D Barr
+#
+#set name :name;
+set name $env(name)
+set boxl $env(boxl)
+
+#read the force field parameters
+cwd                 .
+structure           data/$name-solvated.psf
+parameters          $env(HOME)/toppar_c36_jul20/par_all36m_prot.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_cgenff.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_water_ions.prm
+paraTypeCharmm      on
+paraTypeXplor       off
+waterModel          tip3
+
+# read initial coordinates
+coordinates         data/$name-solvated.pdb
+
+# Output
+outputname          data/$name-min.pdb
+binaryoutput        no
+outputEnergies      10
+# Simulation box sizes
+# This should produce a rhombic dodecahedral box
+set a [expr -0.5 * $boxl]
+set b [expr sqrt(0.5) * $boxl]
+cellBasisVector1    $boxl 0.0   0.0
+cellBasisVector2    0.0   $boxl 0.0
+cellBasisVector3    $a    $a    $b
+cellOrigin           0.0 0.0 0.0
+wrapNearest          on
+
+
+# Non-bonded interaction settings
+switching            on              # Flag to set switching on (if off truncatted cutoff is used)
+switchdist           10.0            # Switch distance <= cutoff
+cutoff               12.0            # Cutoff for non-bounded interaction
+pairlistdist         14.0            # Cutoff for neighbouring list
+
+
+
+
+# Ewald PME parameters
+PME                  on
+#PMEGridSpacing       1.0
+PMEGridSizeX         96
+PMEGridSizeY         96
+PMEGridSizeZ         96
+
+
+# 1-4 non-bounded interaction scaling
+# 1.0 for charmm force field and 0.833333 for Amber
+exclude              scaled1-4
+1-4scaling           1.0
+dielectric           1.0
+mergeCrossterms      no                # Print the CMAP separately for comparison with CHARMM
+
+# Approximations
+rigidBonds           all               # Shake all bonds involving hydrogen
+#rigidTolerance       0.00000001        # TOL of convergence of SHAKE
+rigidTolerance       0.0000001
+rigidIterations      100               # Maximum SHAKE-H iterations
+rigidDieOnError      on                # Exit and report an error if MaxIt of SHAKE-H is achieved 
+useSettle            on                # Use SETTLE for SHAKE water instead it is faster 
+vdwGeometricSigma    no                # Geometric is required for example by OPLS
+COMmotion            no                # Don't allow initial center of mass zero
+zeroMomentum         yes               # remove COM drift due to PME
+
+
+wrapWater            on
+wrapAll              on
+#restraints for minimization
+
+
+
+
+
+minimization         on
+minTinyStep          1e-8
+minBabyStep          1e-8
+#fixedAtoms           on
+#fixedAtomsForces     on
+#fixedAtomsFile       $initpdb
+#fixedAtomsCol        B
+#minimize 100
+#fixedAtoms           off
+
+
+
+
+set initpdb         data/$name-solvated.pdb
+constraints         on
+consref             $initpdb
+conskfile           $initpdb
+conskcol            B
+#minBabyStep         1.0e-4
+#minTinyStep         1.0e-8
+for {set i 1} {$i <= 4} {incr i} {
+	set k [ expr 10 ** (5 - $i) ]
+        constraintScaling   $k
+	minimize 1000
+}

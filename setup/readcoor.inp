@@ -1,0 +1,76 @@
+*
+bomblev -1
+set toppar = ~/toppar_c36_jul20
+open unit 1 read formatted name @toppar/top_all36_prot.rtf
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @toppar/par_all36m_prot.prm
+read para card unit 1
+close unit 1
+open unit 1 read formatted name @name.psf
+read psf card unit 1
+close unit 1
+open unit 1 read formatted name @name-start.pdb
+read coor pdb unit 1
+close unit 1
+!look for undefined heavy atoms
+!generate hydrogen atoms
+coor print select ( resname ILE .and. type HB ) .or. ( resname THR .and. type HB ) end
+
+
+ic generate
+ic param
+!use 1-based residue numbers here
+set res = 1
+label resloop
+        calc r = @res + 695
+        define x select type CA .and. resid @r:@r end
+	!define x select type CA .and. ires @res:@res end
+        !if ?selresn .ne. GLY then
+                !it's a chiral amino acid
+                !introduce a dihedral restraint to force this dihedral to be positive
+        !        cons dihe @res n @res ca @res c @res ha force 1000000.0 min 90.0 width 90.0
+        !endif
+	if ?selresn .eq. ILE then
+		!chiral side chain
+		ic edit
+			dihe @res cg1 @res ca @res *cb @res hb 120.0
+		end
+        endif
+        if ?selresn .eq. THR then
+                !chiral side chain
+                ic edit
+                       	dihe @res og1 @res ca @res *cb @res hb 120.0
+                end
+        endif
+
+incr res by 1
+if res .le. 290 then goto resloop
+
+
+if name .eq. egfr-h773insnph-active-charmm then
+	ic edit
+		!for the proline in the insertion
+		dihe 78 cb 78 n 78 *ca 78 ha 180.0
+	end
+endif
+
+
+ic build
+ic print
+
+coor print select ( resname ILE .and. type HB ) .or. ( resname THR .and. type HB ) end
+
+!for some reason HSP 870 HE1 is not getting built  -- these are CE1's coordinates with 0.01 A add to each one
+coor set xdir 51.5734994694 ydir 14.4824472266 zdir -42.4007798056 select atom prot 870 he1 end
+
+
+coor print select resname HSP end
+open unit 1 write formatted name data/@name.cor
+write coor card unit 1
+close unit 1
+
+open unit 1 write formatted name @name.pdb
+write coor pdb unit 1
+close unit 1
+stop

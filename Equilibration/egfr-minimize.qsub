@@ -1,0 +1,23 @@
+#! /bin/bash
+##SBATCH --account=wong
+#SBATCH --partition=gpu
+#SBATCH --job-name=egfr-minimize
+#SBATCH --time=0-0:15:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --array=31-36
+#SBATCH --gres=gpu:1
+
+task=$SLURM_ARRAY_TASK_ID
+#export name=`echo "egfr-wt-active-charmm egfr-wt-inactive-charmm egfr-t747t751p-active-charmm egfr-t751i759n-active-charmm egfr-v904i-active-charmm egfr-i926n-active-charmm egfr-i966v-active-charmm" |\
+#	 awk -v i=$task '{print $i}'`
+export name=`awk -v i=$task '($1==i) {print $2}' list`
+export boxl=`cat $name-box-lengths`
+
+module load namd
+nprocs=$SLURM_NTASKS
+namd3 +p${nprocs} egfr-minimize-charmm.inp
+mv data/${name}-min.pdb.coor data/${name}-min.pdb

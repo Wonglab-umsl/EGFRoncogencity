@@ -1,0 +1,26 @@
+*
+bomblev -1
+set toppar = ~/toppar_c36_jul20
+open unit 1 read formatted name @toppar/top_all36_prot.rtf
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @toppar/par_all36_prot.prm
+read para card unit 1
+close unit 1
+open unit 1 read formatted name egfr-s720f.seq
+read sequ card unit 1
+close unit 1
+generate prot warn angle dihedral
+
+set res = 1
+label loop
+	calc newres = @res + 695
+	rename resid @newres select resid @res:@res end
+incr res by 1
+if res .le. 290 goto loop
+long
+ioformat extended
+open unit 1 write formatted name egfr-s720f-charmm.psf
+write psf card unit 1
+close unit 1
+stop

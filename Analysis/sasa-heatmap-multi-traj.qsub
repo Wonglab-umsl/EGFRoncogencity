@@ -1,0 +1,13 @@
+#! /bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=requeue
+#SBATCH --job-name=egfr-rmsd-plot
+#SBATCH --time=1-00:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=131072
+
+./sasa-heatmap-multi-traj.py pathogenic 3 1000
+#./rmsd-heatmap2.py 100

@@ -1,0 +1,21 @@
+#! /bin/bash
+#SBATCH --account=wong
+#SBATCH --partition=Lewis
+#SBATCH --job-name=charmm-exercise
+#SBATCH --time=0-1:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=28
+#SBATCH --array=1
+
+task=$SLURM_ARRAY_TASK_ID
+export name=`echo "egfr-wt-active-charmm egfr-wt-inactive-charmm" | awk -v i=$task '{print $i}'`
+export boxl=`cat $name-box-lengths`
+export scratch=/scratch/voavtv/egfr
+
+module load namd/namd-2.11-multicore
+nprocs=$SLURM_NTASKS
+namd2 +p${nprocs} egfr-energy-conv-charmm.inp | tee io/$name-energy-conv.out
+

@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=requeue
+#SBATCH --job-name=egfr-join
+#SBATCH --time=1:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --array=28
+
+task=$SLURM_ARRAY_TASK_ID
+#export name=`echo "egfr-wt-active-charmm egfr-wt-inactive-charmm egfr-t747t751p-active-charmm egfr-t751i759n-active-charmm egfr-dele746a750-active-charmm egfr-t790m-active-charmm egfr-l858r-active-charmm" | \
+#        awk -v i=$task '{print $i}'`
+export name=`awk -v i=$task '($1==i) {print $2}' new-list`
+export id=`awk -v i=$task '($1==i) {print $3}' new-list`
+./join $name $id

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+name=$1 #name of the simulation
+id=$2 #id number of replica
+stride=$3 #frequency of analysis every stride'th frame
+scratch=/cluster/pixstor/wongch-lab/Victor/egfr/dcd-joined
+dcdfname=$scratch/$name-$id.dcd #trajectory file name
+nframes=`~/catdcd/catdcd $dcdfname | grep -i "Total frames:" | awk '{print $NF}'`
+#nframes_anal=`expr $nframes \/ $stride`
+output=$name-$id-kincore-output
+#make sure that the output file is empty at the beginning
+rm $output
+touch $output
+for iframe in `seq $stride $stride $nframes`
+do
+	echo "analyzing frame $iframe"
+	#iframe is the frame number
+	#extract the iframe frame from the trajectory.
+	fname=kincore/$name-$id-$iframe.pdb
+	~/catdcd/catdcd -o $fname -otype pdb -s psf/$name.psf -stype psf \
+		-first $iframe -last $iframe $dcdfname
+	#run the kinase_state script, and append the frame number to the beginning of each line
+	#then append the output to the output file
+	#the | character (called "pipe") tells UNIX to take the output of one command and pass it to another
+	#> means redirect the output to a file (replacing the contents)
+	#>> means redirect, appending to the file
+	~/.conda/envs/kincore-standalone2/bin/python ~/Kincore-standalone2/kinase_state.py $fname | \
+		awk -v iframe=$iframe '{print iframe,$0}' >> $output
+	#remove the pdb file to keep our directory from getting full of pdb files
+	rm $fname
+done

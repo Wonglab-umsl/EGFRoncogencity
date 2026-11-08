@@ -1,0 +1,12 @@
+#! /bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=general
+#SBATCH --job-name=egfr-sec-structure
+#SBATCH --time=1-00:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=262144
+
+./secondary-structure2.py 3 10

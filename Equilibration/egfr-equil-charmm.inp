@@ -1,0 +1,135 @@
+#
+# NAMD script for minimization: H Kamnberaj and D Barr
+#
+#set name :name;
+set name $env(name)
+set boxl $env(boxl)
+set scratch $env(scratch)
+
+#read the force field parameters
+cwd                 .
+structure           data/$name-solvated.psf
+parameters          $env(HOME)/toppar_c36_jul20/par_all36m_prot.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_cgenff.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_water_ions.prm
+paraTypeCharmm      on
+paraTypeXplor       off
+waterModel          tip3
+
+
+# read initial coordinates
+coordinates           data/$name-min.pdb
+#Since we are continuing where we left off after heating the system, 
+#we need to read the coordinates and velocities from the end of the heating simulation.  
+extendedSystem       $scratch/heat-data/$name-heat.xsc
+bincoordinates       $scratch/heat-data/$name-heat.coor
+binvelocities        $scratch/heat-data/$name-heat.vel
+
+
+# Output
+outputname          $scratch/heat-data/$name-equil
+binaryoutput        yes
+#restartname         data/$name-restart
+#restartfreq         500000
+#binaryrestart       yes
+DCDfile             $scratch/heat-dcd/$name-equil.dcd
+DCDUnitCell         yes
+DCDfreq             50
+outputEnergies      50
+outputPressure      50
+XSTfile             $scratch/heat-data/$name-equil.xsc
+XSTfreq             5000
+
+# Simulation box sizes
+#for charmm, use rhombic dodecahedral box
+#we don't need this anymore, NAMD will read the lattice vectors from the XSC file
+cellOrigin           0.0 0.0 0.0
+wrapNearest          on
+
+
+# Non-bonded interaction settings
+switching            on              # Flag to set switching on (if off truncatted cutoff is used)
+switchdist           10.0            # Switch distance <= cutoff
+cutoff               12.0            # Cutoff for non-bounded interaction
+pairlistdist         14.0            # Cutoff for neighbouring list
+
+
+
+
+# Ewald PME parameters
+PME                  on
+#PMEGridSpacing       1.0
+PMEGridSizeX         96
+PMEGridSizeY         96
+PMEGridSizeZ         96
+
+
+# 1-4 non-bounded interaction scaling
+# 1.0 for charmm force field and 0.833333 for Amber
+exclude              scaled1-4
+1-4scaling           1.0
+dielectric           1.0
+mergeCrossterms      no                # Print the CMAP separately for comparison with CHARMM
+
+# Approximations
+rigidBonds           all               # Shake all bonds involving hydrogen
+rigidTolerance       0.00000001        # TOL of convergence of SHAKE
+#rigidTolerance       0.0000001
+rigidIterations      100               # Maximum SHAKE-H iterations
+rigidDieOnError      on                # Exit and report an error if MaxIt of SHAKE-H is achieved 
+useSettle            on                # Use SETTLE for SHAKE water instead it is faster 
+vdwGeometricSigma    no                # Geometric is required for example by OPLS
+COMmotion            no                # Don't allow initial center of mass zero
+#zeroMomentum         yes               # remove COM drift due to PME
+
+# Numerical Integrator settings
+timestep             2.0               # timestep in fs
+# Constant Temperature Control
+langevin            on    # do langevin dynamics
+langevinDamping     1     # damping coefficient (gamma) of 5/ps
+langevinTemp        300
+langevinHydrogen    off    # don't couple langevin bath to hydrogens
+
+#We will switch from running at constant volume to running at constant pressure (which means the periodic box size
+#and volume will change with time).  These parameters control the volume adjustments that maintain constant pressure.
+#langevinPiston        on
+langevinPistonTarget  1.01325 #  in bar -> 1 atm
+langevinPistonPeriod  100.
+langevinPistonDecay   50.
+langevinPistonTemp    300
+
+#for some reason the Nose-Hoover barostat isn't working with the H773NPH mutant.  Try using a Berendsen barostat instead for equilibration only.
+#that didn't work either
+#BerendsenPressure                on
+#BerendsenPressureTarget          1.01325
+#BerendsenPressureCompressibility 4.57e-5
+#BerendsenPressureRelaxationTime  100
+#BerendsenPressureFreq            5
+
+# Format output
+wrapWater             on
+wrapAll               on
+
+#restraints
+set initpdb           data/$name-solvated.pdb
+constraints           on
+consref               $initpdb
+conskfile             $initpdb
+conskcol              B
+
+CUDASOAintegrate      on
+#I may have made a slight mistake with the heating, using a force constant of 10 kcal/mol/A^2 
+#instead of 1 kcal/mol/A^2 as intended.  So we will use force constants that start from there.  It will probably be OK.
+#We will relax the restraints in 5 phases, each lasting 200 ps, with force constants as listed below, for a total of 1 ns.
+set klist             [list 5.0 1.0 0.5 0.1 0.0]
+for {set i 1} {$i <= 5} {incr i} {
+        set prev [expr $i - 1]
+        # Number of Steps
+        set steps [expr int( 200 / 0.002) ]
+        #set start [expr int($prev * $steps)]
+        set k [lindex $klist $prev]
+        constraintScaling            $k
+        #firsttimestep        $start                 # first time step = 0 for a start job /= 0 for restart job
+        run                  $steps
+}
+

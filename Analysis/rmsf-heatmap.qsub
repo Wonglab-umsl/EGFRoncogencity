@@ -1,0 +1,15 @@
+#! /bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=requeue
+#SBATCH --job-name=egfr-rmsf-plot
+#SBATCH --time=12:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=131072
+
+for mut_type in `echo "benign pathogenic"`
+do
+	./rmsf-heatmap.py ${mut_type} 3 1
+done

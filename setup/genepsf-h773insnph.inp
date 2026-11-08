@@ -1,0 +1,39 @@
+*
+bomblev -1
+set toppar = ~/toppar_c36_jul20
+open unit 1 read formatted name @toppar/top_all36_prot.rtf
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @toppar/par_all36_prot.prm
+read para card unit 1
+close unit 1
+open unit 1 read formatted name egfr-h773insnph.seq
+read sequ card unit 1
+close unit 1
+generate prot warn angle dihedral
+
+set res = 1
+label loop
+	calc newres = @res + 695
+	!relabel inserted residues as 773A, 773B, 773C, and then 774 onwards 
+	if @res .eq. 78 then
+		set newres = 773
+	endif
+	if @res .eq. 79 then
+		set newres = 773A
+	endif
+	if @res .eq. 80 then 
+		set newres = 773B
+	endif
+	if @res .ge. 81 then !774 and beyond
+		calc newres = @newres - 2
+	endif
+	rename resid @newres select resid @res:@res end
+incr res by 1
+if res .le. 293 goto loop
+long
+ioformat extended
+open unit 1 write formatted name egfr-h773insnph-active-charmm.psf
+write psf card unit 1
+close unit 1
+stop

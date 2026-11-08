@@ -1,0 +1,132 @@
+#
+# NAMD script for minimization: H Kamnberaj and D Barr
+#
+#set name :name;
+set name $env(name)
+set scratch $env(scratch)
+#The script runs in sections of 1 ns.  That way, if something happens to interrupt the simulation,
+#we can just start where we left off from the previous section.  The submission script will pass the section number
+#each time.
+set section $env(section)
+set id $env(id)
+set prev [expr $section - 1]
+
+#read the force field parameters
+cwd                 .
+structure           $name-solvated.psf
+parameters          $env(HOME)/toppar_c36_jul20/par_all36m_prot.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_cgenff.prm
+parameters          $env(HOME)/toppar_c36_jul20/par_all36_water_ions.prm
+paraTypeCharmm      on
+paraTypeXplor       off
+waterModel          tip3
+
+
+# read initial coordinates
+coordinates           data/$name-min.pdb
+if { $section == 1 } {
+	#this is the first section, so we start from the end of the equilibration.
+	extendedSystem       $scratch/heat-data/$name-equil.xsc
+	bincoordinates       $scratch/heat-data/$name-equil.coor
+	if { $id == 1 } {
+		#use the velocities at the end of equilibration
+		binvelocities        $scratch/heat-data/$name-equil.vel
+	} else {
+		#choose another set of velocities and reinitialize
+		temperature          300
+	}
+} else {
+	#we start from the end of the previous section.  "prev" was calculated earlier.
+	#this must match the specification of the output files below.
+	extendedSystem       $scratch/data/$name-$id-$prev.xsc
+	bincoordinates       $scratch/data/$name-$id-$prev.coor
+	binvelocities        $scratch/data/$name-$id-$prev.vel
+}
+
+# Output -- The DCDFreq option below indicates how often to write frames.
+# We write frames every 500 time steps.  At 2 fs apiece, that is one frame every 1 ps. 
+# These output to two new directories in the scratch space: "data" for the restart files, 
+# and "dcd" for the trajectories.  
+# When we are done we will stick all the sections together and at the same time remove the water molecules.
+outputname          $scratch/data/$name-$id-$section
+binaryoutput        yes
+#restartname         data/$name-restart
+#restartfreq         500000
+#binaryrestart       yes
+DCDfile             $scratch/dcd/$name-$id-$section.dcd
+DCDUnitCell         yes
+DCDfreq             500
+outputEnergies      5000
+outputTiming        5000
+outputPressure      5000
+XSTfile             $scratch/data/$name-$id-$section.xsc
+XSTfreq             5000
+
+# Simulation box sizes
+#for charmm, use rhombic dodecahedral box
+#we don't need this anymore, NAMD will read the lattice vectors from the XSC file
+cellOrigin           0.0 0.0 0.0
+wrapNearest          on
+
+
+# Non-bonded interaction settings
+switching            on              # Flag to set switching on (if off truncatted cutoff is used)
+switchdist           10.0            # Switch distance <= cutoff
+cutoff               12.0            # Cutoff for non-bounded interaction
+pairlistdist         14.0            # Cutoff for neighbouring list
+
+
+
+
+# Ewald PME parameters
+PME                  on
+#PMEGridSpacing       1.0
+PMEGridSizeX         96
+PMEGridSizeY         96
+PMEGridSizeZ         96
+
+
+# 1-4 non-bounded interaction scaling
+# 1.0 for charmm force field and 0.833333 for Amber
+exclude              scaled1-4
+1-4scaling           1.0
+dielectric           1.0
+mergeCrossterms      no                # Print the CMAP separately for comparison with CHARMM
+
+# Approximations
+rigidBonds           all               # Shake all bonds involving hydrogen
+rigidTolerance       0.00000001        # TOL of convergence of SHAKE
+#rigidTolerance       0.0000001
+rigidIterations      100               # Maximum SHAKE-H iterations
+rigidDieOnError      on                # Exit and report an error if MaxIt of SHAKE-H is achieved 
+useSettle            on                # Use SETTLE for SHAKE water instead it is faster 
+vdwGeometricSigma    no                # Geometric is required for example by OPLS
+COMmotion            no                # Don't allow initial center of mass zero
+#zeroMomentum         yes               # remove COM drift due to PME
+
+# Numerical Integrator settings
+timestep             2.0               # timestep in fs
+# Constant Temperature Control
+langevin            on    # do langevin dynamics
+langevinDamping     1     # damping coefficient (gamma) of 5/ps
+langevinTemp        300
+#langevinHydrogen    off    # don't couple langevin bath to hydrogens
+
+langevinPiston        on
+langevinPistonTarget  1.01325 #  in bar -> 1 atm
+langevinPistonPeriod  100.
+langevinPistonDecay   50.
+langevinPistonTemp    300
+
+# Format output
+wrapWater             on
+wrapAll               on
+
+CUDASOAintegrate      on
+#this sets the length of each section -- 10000 ps or 10 ns
+set steps [expr int(20000 / 0.002)]
+#we set the starting step number to be 0 at the beginning
+set start [expr int($prev * $steps)]
+firsttimestep        $start                 # first time step = 0 for a start job /= 0 for restart job
+run                  $steps
+

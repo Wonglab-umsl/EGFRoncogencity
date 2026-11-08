@@ -1,0 +1,80 @@
+#! /bin/bash
+#SBATCH --account=wongch-lab
+#SBATCH --partition=requeue
+#SBATCH --job-name=egfr-run
+#SBATCH --time=2-00:00:00
+##SBATCH --mail-type=begin,end,fail,requeue
+#SBATCH --export=all
+#SBATCH --out=slurm-%A_%a.out
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --array=2,7,8,15-20,26,27
+#SBATCH --mem=2048
+#SBATCH --gres=gpu:A100:1
+
+task=$SLURM_ARRAY_TASK_ID
+#export name=`echo "egfr-wt-active-charmm egfr-wt-inactive-charmm egfr-t747t751p-active-charmm egfr-t751i759n-active-charmm egfr-dele746a750-active-charmm egfr-t790m-active-charmm egfr-l858r-active-charmm" | \
+#        awk -v i=$task '{print $i}'`
+export name=`awk -v i=$task '($1==i) {print $2}' new-list`
+export id=`awk -v i=$task '($1==i) {print $3}' new-list`
+export scratch=/cluster/pixstor/wongch-lab/Victor/egfr
+
+module load namd
+nprocs=$SLURM_NTASKS
+
+
+start=1
+end=25
+
+#check each output log to see if the simulation has already been done
+while :
+do
+	outfname=io/$name-$id-$start.out
+	#test to see if the output file exists
+	if [ ! -s "$outfname" ]; then
+		#the output file doesn't exist so we must start here 
+		break
+	fi
+	#the output file exists, test to see if that section completed successfully
+	#the -c option counts the lines -- here we are just testing to see if the word "cputime" is in the file
+	#NAMD prints this if the section completes successfully
+	n=`grep -ci "cputime" $outfile`
+	if [ "$n" -eq "0" ]; then
+		#this section didn't complete so we start here
+		break
+	fi
+	#the section has been completed so increment "start" and check again
+	start=`expr $start + 1`
+done
+
+
+if [ ! -s "data/atoms-$name" ]; then
+	#Read the PSF and construct a list of the indices of atoms that are in the protein. (1 is subtracted because
+	#catdcd uses zero-based indices, whereas CHARMM uses 1-based indices.)
+	awk '(NF==11) && ($2=="PROT") {print $1-1}' ${name}-solvated.psf > data/atoms-$name
+fi
+
+
+for section in `seq $start $end`
+do
+	echo "starting section $section at `date`"
+	export section
+	output=io/$name-$id-$section.out
+	namd3 +p${nprocs} +setcpuaffinity egfr-run-charmm.inp | tee $output
+	#This tests if there is a "CPUTime" written in the output file, usually output at the end if NAMD finished successfully.
+	if ! grep -qi "CPUTime" io/$name-$id-$section.out; then
+		#did not finish successfully, exit the script
+		exit
+		#that way, we won't uselessly try succeeding sections if one of htem failed.
+	fi
+	#Use catdcd to strip out the water molecules.
+	~/catdcd/catdcd -o $scratch/dcd-nowater/$name-$id-$section.dcd -otype dcd -i data/atoms-$name $scratch/dcd/$name-$id-$section.dcd
+	#$? is the exit code returned by the previous command.  If it is zero, it usually means the previous command executed successfully.
+	result=$?
+	if [ "$result" -eq "0" ]; then
+		#remove the with-water trajectory file to save disk space.
+		rm -v $scratch/dcd/$name-$id-$section.dcd
+	fi
+done
+
+
